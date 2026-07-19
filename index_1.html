@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Control &amp; Gestión de Flota</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    background: #161616;
+    display: flex;
+    justify-content: center;
+    min-height: 100vh;
+  }
+  .card {
+    background: #1f1f1f;
+    max-width: 460px;
+    width: 100%;
+    height: fit-content;
+    min-height: 100vh;
+  }
+  .header {
+    background: linear-gradient(135deg, #9e1c1c, #6e0f0f);
+    color: #fff;
+    text-align: center;
+    padding: 18px 16px;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+  .body-content { padding: 22px 20px 30px; }
+  label {
+    display: block;
+    margin-top: 18px;
+    margin-bottom: 8px;
+    font-size: 12px;
+    color: #999;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+  select, textarea, input[type="number"], input[type="file"] {
+    width: 100%;
+    padding: 12px 14px;
+    border-radius: 8px;
+    border: 1px solid #3a3a3a;
+    font-size: 15px;
+    font-family: inherit;
+    background: #2a2a2a;
+    color: #eee;
+  }
+  select:focus, textarea:focus, input:focus {
+    outline: none;
+    border-color: #b53030;
+  }
+  ::placeholder { color: #777; }
+  input[type="file"] { padding: 10px; font-size: 13px; color: #ccc; }
+  .tipo-selector {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+  }
+  .tipo-btn {
+    flex: 1;
+    padding: 12px 6px;
+    border-radius: 8px;
+    border: 1px solid #3a3a3a;
+    background: #2a2a2a;
+    text-align: center;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    cursor: pointer;
+    color: #999;
+  }
+  .tipo-btn.active {
+    border-color: #b53030;
+    background: #3a1414;
+    color: #fff;
+  }
+  button[type="submit"] {
+    margin-top: 26px;
+    width: 100%;
+    padding: 15px;
+    background: linear-gradient(135deg, #c62e2e, #931f1f);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    cursor: pointer;
+  }
+  button[type="submit"]:disabled { background: #555; }
+  #msg { margin-top: 14px; text-align: center; font-weight: bold; font-size: 14px; }
+  .ok { color: #4caf50; }
+  .error { color: #e57373; }
+  .loading { text-align: center; color: #888; padding: 40px 20px; }
+  .oculto { display: none !important; }
+  .hint { font-size: 11px; color: #777; margin-top: 6px; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="header">Control &amp; Gestión de Flota</div>
+    <div class="body-content">
+      <div id="loading" class="loading">Cargando...</div>
+
+      <form id="form" class="oculto">
+
+        <label>Tipo de registro</label>
+        <div class="tipo-selector">
+          <div class="tipo-btn active" data-tipo="uso">Uso</div>
+          <div class="tipo-btn" data-tipo="salida">Devolución</div>
+          <div class="tipo-btn" data-tipo="mantenimiento">Mantenimiento</div>
+        </div>
+        <input type="hidden" id="tipo" value="uso">
+
+        <label for="patente">Vehículo</label>
+        <select id="patente" required>
+          <option value="">-- Seleccionar --</option>
+        </select>
+
+        <label for="km">Kilometraje actual (odómetro) *</label>
+        <input type="number" id="km" inputmode="numeric" placeholder="Ej: 145200" required>
+
+        <div id="bloque-empleado">
+          <label for="empleado">¿Quién conduce?</label>
+          <select id="empleado">
+            <option value="">-- Seleccionar --</option>
+          </select>
+        </div>
+
+        <div id="bloque-solicitante" class="oculto">
+          <label for="solicitante">¿Quién reporta?</label>
+          <select id="solicitante">
+            <option value="">-- Seleccionar Empleado --</option>
+          </select>
+        </div>
+
+        <div id="bloque-detalle" class="oculto">
+          <label for="detalle">Detalle del mantenimiento / falla</label>
+          <textarea id="detalle" rows="2" placeholder="Describí qué servicio o arreglo necesita..."></textarea>
+
+          <label for="foto">Adjuntar foto (opcional)</label>
+          <input type="file" id="foto" accept="image/*" capture="environment">
+          <div class="hint">Podés sacar la foto directo con la cámara.</div>
+        </div>
+
+        <div id="bloque-observaciones">
+          <label for="observaciones">Observaciones (opcional)</label>
+          <textarea id="observaciones" rows="2" placeholder="Ej: destino, motivo del uso..."></textarea>
+        </div>
+
+        <button type="submit" id="btnEnviar">Enviar Solicitud</button>
+        <div id="msg"></div>
+      </form>
+    </div>
+  </div>
+
+<script>
+  const API_URL = 'https://script.google.com/macros/s/AKfycbyMPGamZjbUA65FtSH2AcCb-HmH438KBqk2X6R5D_shhsSfoLHHczqb6fSagkOiX8cCMA/exec';
+
+  const loadingEl = document.getElementById('loading');
+  const formEl = document.getElementById('form');
+  const patenteSel = document.getElementById('patente');
+  const empleadoSel = document.getElementById('empleado');
+  const solicitanteSel = document.getElementById('solicitante');
+  const tipoInput = document.getElementById('tipo');
+
+  const bloqueEmpleado = document.getElementById('bloque-empleado');
+  const bloqueSolicitante = document.getElementById('bloque-solicitante');
+  const bloqueDetalle = document.getElementById('bloque-detalle');
+  const bloqueObservaciones = document.getElementById('bloque-observaciones');
+
+  fetch(API_URL + '?action=config')
+    .then(function(res) { return res.json(); })
+    .then(function(data) {
+      for (var patente in data.vehiculos) {
+        var opt = document.createElement('option');
+        opt.value = patente;
+        opt.textContent = data.vehiculos[patente] + ' (' + patente + ')';
+        patenteSel.appendChild(opt);
+      }
+      data.empleados.forEach(function(emp) {
+        var opt1 = document.createElement('option');
+        opt1.value = emp;
+        opt1.textContent = emp;
+        empleadoSel.appendChild(opt1);
+
+        var opt2 = document.createElement('option');
+        opt2.value = emp;
+        opt2.textContent = emp;
+        solicitanteSel.appendChild(opt2);
+      });
+      loadingEl.style.display = 'none';
+      formEl.classList.remove('oculto');
+    })
+    .catch(function(err) {
+      loadingEl.textContent = 'Error al cargar el formulario. Recargá la página.';
+      console.error(err);
+    });
+
+  document.querySelectorAll('.tipo-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      document.querySelectorAll('.tipo-btn').forEach(function(b) { b.classList.remove('active'); });
+      btn.classList.add('active');
+      var tipo = btn.getAttribute('data-tipo');
+      tipoInput.value = tipo;
+
+      if (tipo === 'mantenimiento') {
+        bloqueEmpleado.classList.add('oculto');
+        bloqueSolicitante.classList.remove('oculto');
+        bloqueDetalle.classList.remove('oculto');
+        bloqueObservaciones.classList.add('oculto');
+      } else {
+        bloqueEmpleado.classList.remove('oculto');
+        bloqueSolicitante.classList.add('oculto');
+        bloqueDetalle.classList.add('oculto');
+        bloqueObservaciones.classList.remove('oculto');
+      }
+    });
+  });
+
+  function fileToBase64(file) {
+    return new Promise(function(resolve, reject) {
+      var reader = new FileReader();
+      reader.onload = function() { resolve(reader.result); };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  document.getElementById('form').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const msg = document.getElementById('msg');
+    const btn = document.getElementById('btnEnviar');
+    const tipo = tipoInput.value;
+    const patente = patenteSel.value;
+    const km = document.getElementById('km').value;
+
+    if (!patente || !km) {
+      msg.textContent = 'Completá vehículo y kilometraje.';
+      msg.className = 'error';
+      return;
+    }
+
+    const payload = { tipo: tipo, patente: patente, km: km };
+
+    if (tipo === 'mantenimiento') {
+      payload.solicitante = solicitanteSel.value;
+      payload.detalle = document.getElementById('detalle').value;
+      if (!payload.solicitante) {
+        msg.textContent = 'Seleccioná quién reporta.';
+        msg.className = 'error';
+        return;
+      }
+    } else {
+      payload.empleado = empleadoSel.value;
+      payload.observaciones = document.getElementById('observaciones').value;
+      if (!payload.empleado) {
+        msg.textContent = 'Seleccioná quién conduce.';
+        msg.className = 'error';
+        return;
+      }
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Enviando...';
+    msg.textContent = '';
+
+    const fotoInput = document.getElementById('foto');
+    const fotoPromise = (tipo === 'mantenimiento' && fotoInput.files[0])
+      ? fileToBase64(fotoInput.files[0]).then(function(base64) {
+          payload.foto = { data: base64, mimeType: fotoInput.files[0].type };
+        })
+      : Promise.resolve();
+
+    fotoPromise
+      .then(function() {
+        return fetch(API_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify(payload)
+        });
+      })
+      .then(function(res) { return res.json(); })
+      .then(function(result) {
+        if (result.status === 'ok') {
+          msg.textContent = '✅ Registrado correctamente.';
+          msg.className = 'ok';
+          btn.textContent = 'Enviar Solicitud';
+          setTimeout(function() {
+            btn.disabled = false;
+            document.getElementById('form').reset();
+            fotoInput.value = '';
+            msg.textContent = '';
+          }, 2000);
+        } else {
+          throw new Error(result.message || 'Error desconocido');
+        }
+      })
+      .catch(function(err) {
+        msg.textContent = '❌ Error: ' + err.message;
+        msg.className = 'error';
+        btn.disabled = false;
+        btn.textContent = 'Enviar Solicitud';
+      });
+  });
+</script>
+</body>
+</html>
